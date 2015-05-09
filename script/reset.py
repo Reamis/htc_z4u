@@ -17,7 +17,7 @@ def process_copy(src_file, dst_file):
         return
     src_text = utils_clean.cleanup(src_text)
     dst_text = utils_clean.cleanup(dst_text)
-    if len(dst_text) < len(src_text):
+    if dst_text != src_text:
         dst_desc = open(dst_file, 'wb')
         with(dst_desc):
             dst_desc.write(src_text)
@@ -28,18 +28,25 @@ def process_copy(src_file, dst_file):
 
 def process_file(src_file, dst_file):
     if os.access(src_file, os.R_OK) and os.access(dst_file, os.R_OK):
-        src_file_hash = utils_fuzzy_logic.file_hash(src_file)
-        dst_file_hash = utils_fuzzy_logic.file_hash(dst_file)
-        if dst_file_hash == src_file_hash:
-            statinfo_src = os.stat(src_file)
-            statinfo_dst = os.stat(dst_file)
-            if statinfo_dst.st_size < statinfo_src.st_size:
-                process_copy(src_file, dst_file)
-            else:
-                print "same %s => %s" % (src_file, dst_file)
+        need_copy = False
+        if src_file.endswith('.c') or \
+           src_file.endswith('.h'):
+            src_file_hash = utils_fuzzy_logic.file_hash(src_file)
+            dst_file_hash = utils_fuzzy_logic.file_hash(dst_file)
+            if dst_file_hash == src_file_hash:
+                need_copy = True
+        elif src_file.endswith('Kconfig') or \
+                src_file.endswith('.s') or \
+                src_file.endswith('.S'):
+            src_file_hash = utils_clean.cleanup(src_file)
+            dst_file_hash = utils_clean.cleanup(dst_file)
+            if dst_file_hash == src_file_hash:
+                need_copy = True
+
+        if need_copy:
+            process_copy(src_file, dst_file)
         else:
-            utils_fuzzy_logic.optimize_head(src_file, dst_file)
-            utils_fuzzy_logic.optimize_tail(src_file, dst_file)
+            print "skiped: %s => %s" % (src_file, dst_file)
 
 
 def process(src_inode, dst_inode):
@@ -49,7 +56,12 @@ def process(src_inode, dst_inode):
         for dirname, _, filenames in os.walk(src_inode):
             # print path to all filenames.
             for filename in filenames:
-                if filename.endswith('.c') or filename.endswith('.h'):
+                if filename.endswith('.c') or \
+                   filename.endswith('.h') or \
+                   filename.endswith('.s') or \
+                   filename.endswith('.S') or \
+                   filename.endswith('Kconfig') or \
+                   filename == 'Kconfig':
                     src_file = os.path.join(dirname, filename)
                     dst_file = src_file.replace(src_inode, dst_inode)
                     process_file(src_file, dst_file)
@@ -57,9 +69,10 @@ def process(src_inode, dst_inode):
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print """
-            usage: python restore.py linux-3.4 android_kernel_htc_z4u
-            restore comments in other dir by code from origin dir
+        print """"
+            usage: python reset.py linux-3.4 android_kernel_htc_z4u"
+            script for copy same code from one dir to other without
+            relation to comments
         """
     else:
         process(sys.argv[1], sys.argv[2])
